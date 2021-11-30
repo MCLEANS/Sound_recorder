@@ -147,10 +147,11 @@ int main(void)
 	  uint16_t adc_value = HAL_ADC_GetValue(&hadc1);
 	  /* Print ADC value to serial console */
 	  uint8_t data[5];
+	  uint8_t end_line[] = "\n";
 	  itoa(adc_value,data,10);
 	  HAL_UART_Transmit(&huart1, data, sizeof(data), HAL_MAX_DELAY);
+	  HAL_UART_Transmit(&huart1, end_line, sizeof(end_line), HAL_MAX_DELAY);
 
-	  HAL_Delay(500);
   }
   /* USER CODE END 3 */
 }
@@ -299,7 +300,7 @@ static void MX_USART1_UART_Init(void)
 
   /* USER CODE END USART1_Init 1 */
   huart1.Instance = USART1;
-  huart1.Init.BaudRate = 9600;
+  huart1.Init.BaudRate = 115200;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_1;
   huart1.Init.Parity = UART_PARITY_NONE;
