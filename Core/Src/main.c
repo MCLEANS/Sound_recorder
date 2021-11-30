@@ -52,7 +52,9 @@ UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 
-uint8_t  wavheader[44];
+uint8_t wavheader[44];
+
+
 
 /* USER CODE END PV */
 
@@ -119,20 +121,63 @@ int main(void)
 	 uint8_t mt_success[] = "SD card mounted successfully\n";
 	 HAL_UART_Transmit(&huart1,mt_success, sizeof(mt_success),HAL_MAX_DELAY);
 	 /* Open File for writing */
-	 FRESULT fr =  f_open(&fil, "write.txt", FA_OPEN_ALWAYS | FA_WRITE | FA_READ);
+	 FRESULT fr =  f_open(&fil, "wav.txt", FA_OPEN_ALWAYS | FA_WRITE | FA_READ);
 	  if( fr == FR_OK){
 		  /* Perform writing or reading action */
 		  uint8_t open_success[] = "File opened successfully\n";
 		  HAL_UART_Transmit(&huart1,open_success, sizeof(open_success),HAL_MAX_DELAY);
-		  f_lseek(&fil, fil.fsize);
-		  f_puts("Hello from STM32CUBE\n", &fil);
+
+		  /* Generate the Header Chunk */
+		  f_puts("RIFF",&fil); //Header chunk ID
+		  f_puts("----",&fil); //File size (Minus the header ID and the file-size itself
+		  f_puts("WAVE",&fil); //RIFF Type
+		  /* Generate the Format Chunk */
+		  f_puts("fmt ",&fil); // Format chunk ID
+		  f_puts("1600",&fil); //Size
+		  f_puts("10",&fil); //Compression code (1. PCM/Uncompressed
+		  f_puts("44100",&fil); //Sample-rate
+		  f_puts("Samplerate * bitdepth / 8",&fil); //Average bytes per second
+		  f_puts("20",&fil); //Block align (bytes per sample size
+		  f_puts("16",&fil); //Significant Bits per sample
+		  /* Generate Data Chunk */
+		  f_puts("data",&fil); //Data chunk ID
+		  f_puts("----",&fil); //Size of data chunk
+
+		  int preaudio_position = fil.fsize;
+
+		  /* Sample data here */
+		  f_puts("data1",&fil);
+		  f_puts("data2",&fil);
+		  f_puts("data3",&fil);
+		  f_puts("data4",&fil);
+		  f_puts("data5",&fil);
+		  f_puts("data6",&fil);
+		  f_puts("data7",&fil);
+		  f_puts("data8",&fil);
+		  /* Sample data ends here */
+
+		  int postaudio_position = fil.fsize;
+
+		  /* Fill in data chunk size */
+		  f_lseek(&fil, preaudio_position - 4);
+		  uint8_t data_size[4];
+		  itoa((postaudio_position - preaudio_position),data_size,10);
+		  f_puts(data_size,&fil);
+
+		  /* Fill in the Header chunk size */
+		  f_lseek(&fil, 4);
+		  uint8_t file_size[4];
+		  itoa((postaudio_position - 8),file_size,10);
+		  f_puts(file_size,&fil);
+
+
 		  f_close(&fil);
 
 	  }
 	  else{
 		  /* Perform error handling since opening file failed */
 		  uint8_t opn_error[] = "Opening file failed with Error :  ";
-		  uint8_t error_msg[3];
+		  uint8_t error_msg[2];
 		  itoa(fr,error_msg,10);
 		  uint8_t end_line_char[] = "\n";
 		  HAL_UART_Transmit(&huart1,opn_error, sizeof(opn_error),HAL_MAX_DELAY);
@@ -151,15 +196,6 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 	 // HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-	  /* Start ADC conversion and read ADC value */
-	  HAL_ADC_Start(&hadc1);
-	  uint16_t adc_value = HAL_ADC_GetValue(&hadc1);
-	  /* Print ADC value to serial console */
-	  uint8_t data[5];
-	  uint8_t end_line[] = "\n";
-	  itoa(adc_value,data,10);
-	  HAL_UART_Transmit(&huart1, data, sizeof(data), HAL_MAX_DELAY);
-	  HAL_UART_Transmit(&huart1, end_line, sizeof(end_line), HAL_MAX_DELAY);
 
   }
   /* USER CODE END 3 */
@@ -383,7 +419,7 @@ static void MX_USART1_UART_Init(void)
 
   /* USER CODE END USART1_Init 1 */
   huart1.Instance = USART1;
-  huart1.Init.BaudRate = 9600;
+  huart1.Init.BaudRate = 115200;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_1;
   huart1.Init.Parity = UART_PARITY_NONE;
@@ -445,7 +481,15 @@ static void MX_GPIO_Init(void)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	/* Confirm we are here because Timer 1 update event occurred */
 	if(htim == &htim1){
-		HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+		/* Start ADC conversion and read ADC value */
+		//HAL_ADC_Start(&hadc1);
+		uint16_t adc_value = HAL_ADC_GetValue(&hadc1);
+		/* Print ADC value to serial console */
+		uint8_t data[5];
+		uint8_t end_line[] = "\n";
+		itoa(adc_value,data,10);
+		//HAL_UART_Transmit(&huart1, data, sizeof(data), HAL_MAX_DELAY);
+		//HAL_UART_Transmit(&huart1, end_line, sizeof(end_line), HAL_MAX_DELAY);
 	}
 }
 
