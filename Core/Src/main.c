@@ -34,6 +34,8 @@
 /* USER CODE BEGIN PD */
 FATFS fs;
 FIL fil;
+
+#define BUFFER_SIZE 1
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -52,7 +54,15 @@ UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 
-uint8_t wavheader[44];
+uint8_t start_recording = 0;
+
+int preaudio_position = 0;
+int postaudio_position = 0;
+
+uint8_t write_data = 0;
+
+uint16_t data_buffer[BUFFER_SIZE];
+uint16_t data_buffer_position = 0;
 
 
 
@@ -143,35 +153,13 @@ int main(void)
 		  f_puts("data",&fil); //Data chunk ID
 		  f_puts("----",&fil); //Size of data chunk
 
-		  int preaudio_position = fil.fsize;
+		  preaudio_position = fil.fsize;
+
 
 		  /* Sample data here */
-		  f_puts("data1",&fil);
-		  f_puts("data2",&fil);
-		  f_puts("data3",&fil);
-		  f_puts("data4",&fil);
-		  f_puts("data5",&fil);
-		  f_puts("data6",&fil);
-		  f_puts("data7",&fil);
-		  f_puts("data8",&fil);
+		  start_recording = 1;
 		  /* Sample data ends here */
 
-		  int postaudio_position = fil.fsize;
-
-		  /* Fill in data chunk size */
-		  f_lseek(&fil, preaudio_position - 4);
-		  uint8_t data_size[4];
-		  itoa((postaudio_position - preaudio_position),data_size,10);
-		  f_puts(data_size,&fil);
-
-		  /* Fill in the Header chunk size */
-		  f_lseek(&fil, 4);
-		  uint8_t file_size[4];
-		  itoa((postaudio_position - 8),file_size,10);
-		  f_puts(file_size,&fil);
-
-
-		  f_close(&fil);
 
 	  }
 	  else{
@@ -195,7 +183,41 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	 // HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+	// HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+	  if(write_data){
+		for(volatile int i = 0; i < BUFFER_SIZE; i++){
+			uint8_t payload[5];
+			uint8_t endline[]="\n";
+			itoa(data_buffer[i],payload,10);
+			f_puts(payload,&fil);
+			HAL_UART_Transmit(&huart1, payload, sizeof(payload), HAL_MAX_DELAY);
+			HAL_UART_Transmit(&huart1, endline, sizeof(endline), HAL_MAX_DELAY);
+		}
+		/****** Fill in file size blanks and close file ********/
+		postaudio_position = fil.fsize;
+
+		/* Fill in data chunk size */
+		f_lseek(&fil, preaudio_position - 4);
+		uint8_t data_size[4];
+		itoa((postaudio_position - preaudio_position),data_size,10);
+		f_puts(data_size,&fil);
+
+		/* Fill in the Header chunk size */
+		f_lseek(&fil, 4);
+		uint8_t file_size[4];
+		itoa((postaudio_position - 8),file_size,10);
+		f_puts(file_size,&fil);
+
+		f_close(&fil);
+		write_data = 0;
+
+		uint8_t close_success[] = "File closed successfully";
+
+		HAL_UART_Transmit(&huart1, close_success, sizeof(close_success), HAL_MAX_DELAY);
+
+		/***********************************************************/
+
+	}
 
   }
   /* USER CODE END 3 */
@@ -481,15 +503,27 @@ static void MX_GPIO_Init(void)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	/* Confirm we are here because Timer 1 update event occurred */
 	if(htim == &htim1){
-		/* Start ADC conversion and read ADC value */
-		//HAL_ADC_Start(&hadc1);
-		uint16_t adc_value = HAL_ADC_GetValue(&hadc1);
-		/* Print ADC value to serial console */
-		uint8_t data[5];
-		uint8_t end_line[] = "\n";
-		itoa(adc_value,data,10);
-		//HAL_UART_Transmit(&huart1, data, sizeof(data), HAL_MAX_DELAY);
-		//HAL_UART_Transmit(&huart1, end_line, sizeof(end_line), HAL_MAX_DELAY);
+
+		if(start_recording){
+			/* Start ADC conversion and read ADC value */
+			HAL_ADC_Start(&hadc1);
+			uint16_t adc_value = HAL_ADC_GetValue(&hadc1);
+			/* Write value to buffer */
+			data_buffer[data_buffer_position] = adc_value;
+			data_buffer_position ++;
+
+			if(data_buffer_position >= (BUFFER_SIZE - 1)){
+				write_data = 1;
+				start_recording = 0;
+			}
+			/* Print ADC value to serial console */
+			uint8_t data[5];
+			uint8_t end_line[] = "\n";
+			itoa(adc_value,data,10);
+			HAL_UART_Transmit(&huart1, data, sizeof(data), HAL_MAX_DELAY);
+			HAL_UART_Transmit(&huart1, end_line, sizeof(end_line), HAL_MAX_DELAY);
+
+		}
 	}
 }
 
